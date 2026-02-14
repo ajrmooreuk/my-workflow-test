@@ -88,14 +88,24 @@ if [[ -z "$ORG" ]]; then
 fi
 
 # ─── Tier definitions ───────────────────────────────────────
-TIERS=("dev" "test" "prod")
-declare -A TIER_MODE=( [dev]="solo" [test]="team" [prod]="team" )
+TIERS="dev test prod"
 
-# Workflows installed per tier
-declare -A TIER_WORKFLOWS
-TIER_WORKFLOWS[dev]="promote.yml validate-conventions.yml"
-TIER_WORKFLOWS[test]="validate-conventions.yml"
-TIER_WORKFLOWS[prod]="auto-tag.yml sync-to-live.yml drift-detection.yml"
+# Lookup functions (bash 3.2 compatible — no associative arrays)
+tier_mode() {
+  case "$1" in
+    dev)  echo "solo" ;;
+    test) echo "team" ;;
+    prod) echo "team" ;;
+  esac
+}
+
+tier_workflows() {
+  case "$1" in
+    dev)  echo "promote.yml validate-conventions.yml" ;;
+    test) echo "validate-conventions.yml" ;;
+    prod) echo "auto-tag.yml sync-to-live.yml drift-detection.yml" ;;
+  esac
+}
 
 banner "Azlan Workflow — Promotion Setup"
 echo "  Owner:      $ORG"
@@ -109,7 +119,7 @@ MANIFEST="$REPO_ROOT/promotion/convention-manifest.json"
 [[ -f "$MANIFEST" ]] || fail "Convention manifest not found at $MANIFEST"
 
 # ─── Create each tier repo ──────────────────────────────────
-for tier in "${TIERS[@]}"; do
+for tier in $TIERS; do
   REPO_NAME="${PREFIX}-${tier}"
   FULL_REPO="${ORG}/${REPO_NAME}"
 
@@ -167,7 +177,7 @@ ENVEOF
   # Install tier-appropriate workflows
   info "Installing ${tier} tier workflows..."
   mkdir -p .github/workflows
-  for wf in ${TIER_WORKFLOWS[$tier]}; do
+  for wf in $(tier_workflows "$tier"); do
     if [[ -f "$REPO_ROOT/.github/workflows/$wf" ]]; then
       cp "$REPO_ROOT/.github/workflows/$wf" ".github/workflows/$wf"
       step "  $wf"
@@ -197,7 +207,7 @@ ENVEOF
   fi
 
   # Branch protection
-  MODE="${TIER_MODE[$tier]}"
+  MODE=$(tier_mode "$tier")
   if [[ -f "$REPO_ROOT/scripts/setup-branch-protection.sh" ]]; then
     bash "$REPO_ROOT/scripts/setup-branch-protection.sh" --repo "$FULL_REPO" --mode "$MODE" 2>/dev/null || info "Branch protection skipped (may need admin access)"
     step "Branch protection set ($MODE mode)"
@@ -230,7 +240,7 @@ done
 banner "Promotion Setup Complete"
 
 echo "  Three repos created:"
-for tier in "${TIERS[@]}"; do
+for tier in $TIERS; do
   echo "    https://github.com/${ORG}/${PREFIX}-${tier}"
 done
 
@@ -239,7 +249,7 @@ echo -e "  ${YELLOW}ACTION REQUIRED:${NC} Add a Personal Access Token as a secre
 echo "  The PAT needs 'repo' scope for cross-repo promotion."
 echo ""
 echo "  Run these commands (you'll be prompted for the token):"
-for tier in "${TIERS[@]}"; do
+for tier in $TIERS; do
   echo "    gh secret set PROMOTION_PAT --repo ${ORG}/${PREFIX}-${tier}"
 done
 
