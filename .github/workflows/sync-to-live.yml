@@ -1,0 +1,110 @@
+name: Sync to Live Repos
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  load-repos:
+    runs-on: ubuntu-latest
+    outputs:
+      repos: ${{ steps.parse.outputs.repos }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Parse live repos list
+        id: parse
+        run: |
+          repos=$(jq -c '[.repos[].name]' promotion/live-repos.json)
+          echo "repos=$repos" >> "$GITHUB_OUTPUT"
+          echo "Live repos: $repos"
+
+  sync:
+    needs: load-repos
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        repo: ${{ fromJson(needs.load-repos.outputs.repos) }}
+      fail-fast: false
+    steps:
+      - name: Checkout prod (source)
+        uses: actions/checkout@v4
+        with:
+          path: source
+
+      - name: Checkout live repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ matrix.repo }}
+          token: ${{ secrets.PROMOTION_PAT }}
+          path: live
+
+      - name: Check version pin
+        id: pin
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          PIN_FILE="live/azlan-workflow-version"
+          if [[ -f "$PIN_FILE" ]]; then
+            PINNED=$(tr -d '[:space:]' < "$PIN_FILE")
+            if [[ "$PINNED" != "$TAG" && "$PINNED" != "latest" ]]; then
+              echo "skip=true" >> "$GITHUB_OUTPUT"
+              echo "Repo ${{ matrix.repo }} pinned to $PINNED, current tag is $TAG — skipping."
+            else
+              echo "skip=false" >> "$GITHUB_OUTPUT"
+            fi
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+            echo "No pin file found — syncing."
+          fi
+
+      - name: Copy convention files
+        if: steps.pin.outputs.skip != 'true'
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          MANIFEST="source/promotion/convention-manifest.json"
+          copied=0
+          for file in $(jq -r '.files[]' "$MANIFEST"); do
+            if [[ -f "source/$file" ]]; then
+              mkdir -p "live/$(dirname "$file")"
+              cp "source/$file" "live/$file"
+              copied=$((copied + 1))
+            fi
+          done
+          echo "${TAG}" > "live/azlan-workflow-version"
+          echo "Copied $copied files, pinned to ${TAG}."
+
+      - name: Create sync PR
+        if: steps.pin.outputs.skip != 'true'
+        working-directory: live
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTION_PAT }}
+        run: |
+          TAG="${GITHUB_REF#refs/tags/}"
+          BRANCH="azlan-workflow-sync/${TAG}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No changes to sync for ${{ matrix.repo }}."
+            exit 0
+          fi
+          git checkout -b "$BRANCH"
+          git commit -m "chore: sync Azlan workflow conventions to ${TAG}"
+          git push origin "$BRANCH"
+          gh pr create \
+            --title "chore: sync Azlan workflow to ${TAG}" \
+            --body "$(cat <<EOF
+          ## Automated Sync
+
+          Convention files updated from Azlan workflow prod release **${TAG}**.
+
+          This PR was created automatically. Review and merge at your convenience.
+
+          ### What changed
+          $(git diff --name-only HEAD~1 2>/dev/null || echo "See commits tab")
+          EOF
+          )"
+          echo "## Sync PR created on ${{ matrix.repo }}" >> "$GITHUB_STEP_SUMMARY"

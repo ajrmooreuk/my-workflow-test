@@ -1,0 +1,26 @@
+{
+  "version": "1.0.0",
+  "description": "Convention files promoted across dev/test/prod repos",
+  "files": [
+    ".github/ISSUE_TEMPLATE/config.yml",
+    ".github/ISSUE_TEMPLATE/epic.yml",
+    ".github/ISSUE_TEMPLATE/feature.yml",
+    ".github/ISSUE_TEMPLATE/story.yml",
+    ".github/ISSUE_TEMPLATE/pbs.yml",
+    ".github/ISSUE_TEMPLATE/wbs.yml",
+    ".github/pull_request_template.md",
+    ".github/labels.yml",
+    ".github/workflows/enforce-registry-link.yml",
+    ".github/workflows/validate-issue-naming.yml",
+    ".github/workflows/validate-labels.yml",
+    "scripts/bootstrap-new-repo.sh",
+    "scripts/setup-all.sh",
+    "scripts/setup-labels.sh",
+    "scripts/setup-branch-protection.sh",
+    "scripts/setup-gh-project.sh",
+    "scripts/migrate-issues-into-hierarchy.sh"
+  ],
+  "optional": [
+    "azlan-github-workflow/"
+  ]
+}
