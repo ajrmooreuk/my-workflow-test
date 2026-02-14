@@ -84,12 +84,14 @@ Create a [fine-grained PAT](https://github.com/settings/tokens?type=beta) with `
 
 ## Docs
 
+- [Team Operations Guide](docs/team-operations-guide.md) — Setup, operate, and maintain the pipeline (2–4 person team)
 - [Promotion Strategy](docs/promotion-strategy.md) — Three-repo architecture and rationale
 - [Onboarding](docs/onboarding.md) — Three adoption paths
 - [Quick Reference](docs/quick-reference.md) — Naming conventions, labels, commands
 - [Migration Checklist](docs/migration-checklist.md) — Retrofit existing repos
 - [SME Test Guide](docs/sme-test-guide.md) — Step-by-step validation walkthrough
 - [Publishing Guide](docs/publishing-guide.md) — Public distribution strategy
+- [PAT Setup Guide](docs/pat-setup-guide.md) — Classic PAT creation and troubleshooting
 - [ADR-001](docs/adr-001-packaging-approach.md) — Packaging approach decision record
 
 ## Config Files
