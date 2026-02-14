@@ -1,0 +1,96 @@
+name: Drift Detection
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  detect-drift:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: prod
+
+      - name: Check live repos for drift
+        env:
+          GH_TOKEN: ${{ secrets.PROMOTION_PAT }}
+        run: |
+          MANIFEST="prod/promotion/convention-manifest.json"
+          LIVE_REPOS="prod/promotion/live-repos.json"
+          REPORT=""
+          DRIFT_FOUND=false
+
+          for repo in $(jq -r '.repos[].name' "$LIVE_REPOS"); do
+            echo "Checking $repo..."
+
+            if ! gh repo clone "$repo" "live-repo" -- --quiet --depth 1 2>/dev/null; then
+              REPORT+="## $repo\n:x: Could not clone\n\n"
+              DRIFT_FOUND=true
+              continue
+            fi
+
+            DRIFTED=""
+            for file in $(jq -r '.files[]' "$MANIFEST"); do
+              PROD_FILE="prod/$file"
+              LIVE_FILE="live-repo/$file"
+              [[ ! -f "$PROD_FILE" ]] && continue
+              if [[ ! -f "$LIVE_FILE" ]]; then
+                DRIFTED+="- :warning: Missing: \`$file\`\n"
+              elif ! diff -q "$PROD_FILE" "$LIVE_FILE" > /dev/null 2>&1; then
+                DRIFTED+="- :warning: Modified: \`$file\`\n"
+              fi
+            done
+
+            PIN="(no pin)"
+            [[ -f "live-repo/azlan-workflow-version" ]] && PIN=$(cat "live-repo/azlan-workflow-version")
+
+            if [[ -n "$DRIFTED" ]]; then
+              DRIFT_FOUND=true
+              REPORT+="## $repo (pinned: $PIN)\n$DRIFTED\n"
+            else
+              REPORT+="## $repo (pinned: $PIN)\n:white_check_mark: In sync\n\n"
+            fi
+
+            rm -rf live-repo
+          done
+
+          {
+            echo "## Drift Detection Report"
+            echo ""
+            echo -e "$REPORT"
+          } > drift-report.md
+
+          cat drift-report.md
+
+          if [[ "$DRIFT_FOUND" == "true" ]]; then
+            echo "::warning::Drift detected in one or more live repos"
+            EXISTING=$(gh issue list --repo "${{ github.repository }}" \
+              --label "drift-detection" --state open --json number --jq '.[0].number // empty')
+
+            BODY="$(cat drift-report.md)"
+            if [[ -n "$EXISTING" ]]; then
+              gh issue comment "$EXISTING" --repo "${{ github.repository }}" --body "$BODY"
+              echo "Updated existing issue #$EXISTING"
+            else
+              gh issue create --repo "${{ github.repository }}" \
+                --title "Drift detected in live repos ($(date -u +%Y-%m-%d))" \
+                --label "drift-detection" \
+                --body "$BODY"
+              echo "Created new drift detection issue"
+            fi
+          else
+            echo "All repos in sync."
+          fi
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: drift-report
+          path: drift-report.md

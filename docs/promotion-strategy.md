@@ -114,8 +114,22 @@ Total: half a day to build. After that, promotion is a one-command operation.
 
 ---
 
-## Decision Required
+## Implementation Status
 
-1. **Do we version-pin live repos** or auto-sync on every prod release?
-2. **Who has write access to prod repo** — lead only, or any approver?
-3. **Do we need drift detection** or trust that teams won't edit convention files locally?
+All promotion automation is now implemented. The following files power the pipeline:
+
+| Stage | Workflow / Script | Location |
+|-------|-------------------|----------|
+| CI gate | `validate-conventions.yml` | `.github/workflows/` |
+| Promote dev→test / test→prod | `promote.yml` | `.github/workflows/` |
+| Auto-tag on prod merge | `auto-tag.yml` | `.github/workflows/` |
+| Sync to live repos | `sync-to-live.yml` | `.github/workflows/` |
+| Drift detection | `drift-detection.yml` | `.github/workflows/` |
+| Three-repo bootstrap | `setup-promotion-repos.sh` | `scripts/` |
+| CLI promotion shortcut | `promote.sh` | `scripts/` |
+
+### Resolved Decisions
+
+1. **Version pinning**: Supported per-repo. Each live repo has an `azlan-workflow-version` file — set to a tag (e.g. `v1.2.0`) to pin, or `latest` to auto-sync. Configured in `promotion/live-repos.json`.
+2. **Prod access**: Configurable via branch protection mode. Default: team mode (1 required review). Override with `--mode` flag in setup script.
+3. **Drift detection**: Enabled. Runs weekly (Monday 9am UTC) via `drift-detection.yml`. Creates/updates a GitHub issue with label `drift-detection` when divergence is found.

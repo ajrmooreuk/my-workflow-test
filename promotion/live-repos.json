@@ -1,0 +1,11 @@
+{
+  "version": "1.0.0",
+  "description": "Live repos that receive convention updates from prod releases",
+  "repos": [
+    {
+      "name": "ajrmooreuk/Azlan-EA-AAA",
+      "pin": true,
+      "notes": "Main ontology and visualiser repo"
+    }
+  ]
+}
