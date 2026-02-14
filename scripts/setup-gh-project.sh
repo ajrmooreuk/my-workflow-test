@@ -66,12 +66,13 @@ create_field() {
   local name="$1"
   local type="$2"
   shift 2
-  local extra_args=("$@")
+  local extra_args=()
+  if [[ $# -gt 0 ]]; then extra_args=("$@"); fi
 
   if gh project field-list "$PROJECT_NUMBER" --owner "$OWNER" --format json --jq ".[].name" 2>/dev/null | grep -qxF "$name"; then
     echo "  [skip] $name (already exists)"
   else
-    gh project field-create "$PROJECT_NUMBER" --owner "$OWNER" --name "$name" --data-type "$type" "${extra_args[@]}" 2>/dev/null && \
+    gh project field-create "$PROJECT_NUMBER" --owner "$OWNER" --name "$name" --data-type "$type" ${extra_args[@]+"${extra_args[@]}"} 2>/dev/null && \
       echo "  [created] $name" || \
       echo "  [skip] $name (may already exist)"
   fi

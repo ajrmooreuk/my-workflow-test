@@ -5,7 +5,10 @@
 # Usage:
 #   gh api repos/ajrmooreuk/Azlan-EA-AAA/contents/scripts/bootstrap-new-repo.sh -q '.content' | base64 -d | bash -s -- my-repo-name
 #
-# Or locally:
+# Or locally (interactive — prompts for name/options):
+#   ./scripts/bootstrap-new-repo.sh
+#
+# Or with arguments (non-interactive):
 #   ./scripts/bootstrap-new-repo.sh my-repo-name [--mode solo|team] [--private] [--with-plugin] [--project-title "Name"]
 
 set -euo pipefail
@@ -42,12 +45,13 @@ while [[ $# -gt 0 ]]; do
     --source-branch)  SOURCE_BRANCH="$2"; shift 2 ;;
     --help|-h)
       cat <<'HELP'
-Usage: bootstrap-new-repo.sh <repo-name> [options]
+Usage: bootstrap-new-repo.sh [<repo-name>] [options]
 
 Creates a new GitHub repository fully configured with the Azlan workflow.
+Run with no arguments for interactive mode (prompts for name and options).
 
 Arguments:
-  <repo-name>              Name for the new repository (required)
+  <repo-name>              Name for the new repository (interactive if omitted)
 
 Options:
   --mode solo|team         Branch protection level (default: solo)
@@ -66,11 +70,13 @@ What it does (in order):
   7. (Optional) Downloads the Claude Code plugin
 
 Examples:
+  ./scripts/bootstrap-new-repo.sh                                    # interactive mode
   ./scripts/bootstrap-new-repo.sh my-new-project
   ./scripts/bootstrap-new-repo.sh my-new-project --mode team --private
   ./scripts/bootstrap-new-repo.sh my-new-project --with-plugin --project-title "Sprint Board"
 
 One-liner (downloads and runs — works with private repos):
+  gh api repos/ajrmooreuk/Azlan-EA-AAA/contents/scripts/bootstrap-new-repo.sh -q '.content' | base64 -d | bash -s --              # interactive
   gh api repos/ajrmooreuk/Azlan-EA-AAA/contents/scripts/bootstrap-new-repo.sh -q '.content' | base64 -d | bash -s -- my-new-project
 HELP
       exit 0
@@ -81,14 +87,54 @@ HELP
 done
 
 # ─── Validation ─────────────────────────────────────────────
-if [[ -z "$REPO_NAME" ]]; then
-  fail "Repository name is required.\n  Usage: $0 <repo-name> [--mode solo|team] [--private] [--with-plugin]"
-fi
-
 command -v gh >/dev/null 2>&1 || fail "GitHub CLI (gh) is not installed.\n  Install it from: https://cli.github.com/"
 gh auth status >/dev/null 2>&1 || fail "GitHub CLI is not authenticated.\n  Run: gh auth login"
 
 OWNER=$(gh api user --jq '.login')
+
+# ─── Interactive mode (when no repo name supplied) ──────────
+if [[ -z "$REPO_NAME" ]]; then
+  banner "Azlan Workflow — Interactive Setup"
+  echo -e "  Logged in as: ${BOLD}$OWNER${NC}"
+  echo ""
+
+  # Read from /dev/tty so prompts work even when script is piped via stdin
+  read -rp "  Repository name: " REPO_NAME < /dev/tty
+  [[ -z "$REPO_NAME" ]] && fail "Repository name cannot be empty."
+
+  read -rp "  Project board title [${REPO_NAME}]: " PROJECT_TITLE < /dev/tty
+  PROJECT_TITLE="${PROJECT_TITLE:-$REPO_NAME}"
+
+  echo ""
+  echo "  Visibility:"
+  echo "    1) public  (default)"
+  echo "    2) private"
+  read -rp "  Choose [1]: " vis_choice < /dev/tty
+  case "${vis_choice:-1}" in
+    2) VISIBILITY="--private" ;;
+    *) VISIBILITY="--public"  ;;
+  esac
+
+  echo ""
+  echo "  Branch protection mode:"
+  echo "    1) solo  (default) — PRs optional, force-push blocked"
+  echo "    2) team  — PRs required, 1 approval"
+  read -rp "  Choose [1]: " mode_choice < /dev/tty
+  case "${mode_choice:-1}" in
+    2) MODE="team" ;;
+    *) MODE="solo" ;;
+  esac
+
+  echo ""
+  read -rp "  Install Claude Code plugin? (y/N): " plugin_choice < /dev/tty
+  case "${plugin_choice:-n}" in
+    [yY]*) WITH_PLUGIN=true ;;
+    *)     WITH_PLUGIN=false ;;
+  esac
+
+  echo ""
+fi
+
 FULL_REPO="$OWNER/$REPO_NAME"
 
 if [[ -z "$PROJECT_TITLE" ]]; then

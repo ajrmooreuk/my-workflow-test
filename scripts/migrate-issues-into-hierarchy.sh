@@ -55,17 +55,6 @@ fi
 echo "${PREFIX}Scanning issues in $REPO..."
 echo ""
 
-# Pattern definitions: title_regex -> label, type_name
-declare -A PATTERNS
-PATTERNS=(
-  ["Epic"]="type:epic"
-  ["Feature"]="type:feature"
-  ["Story"]="type:story"
-  ["PBS"]="type:pbs"
-  ["WBS"]="type:wbs"
-  ["Registry"]="type:registry"
-)
-
 TOTAL=0
 LABELED=0
 SKIPPED=0
